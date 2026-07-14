@@ -20,9 +20,9 @@ Three factors were constructed for each stock, at each point in time:
 
 | Factor | Definition | Rationale |
 |---|---|---|
-| Momentum | 126-day (≈6 month) trailing return | Captures trend-following behaviour in equity returns |
-| Volatility | 21-day (≈1 month) rolling standard deviation of daily returns | Captures recent risk/uncertainty in the stock |
-| Price factor | % distance of current price from its 200-day moving average | Captures longer-term trend positioning |
+| Momentum | 126-day (≈6 month) trailing return | Momentum in equities is a well-documented empirical anomaly (Jegadeesh & Titman, 1993): stocks that have performed well over the past 3–12 months tend to continue outperforming over the following months, likely due to underreaction to information and gradual investor herding. |
+| Volatility | 21-day (≈1 month) rolling standard deviation of daily returns | Volatility proxies for recent risk and uncertainty in a stock; high-volatility stocks often behave differently in terms of forward returns than stable ones, and volatility is a standard risk-adjustment input in asset pricing. |
+| Price factor | % distance of current price from its 200-day moving average | Captures a stock's positioning relative to its longer-term trend — a proxy used in both trend-following (continuation) and mean-reversion (overextension) strategies, giving the model a longer-horizon signal to complement the shorter-horizon momentum factor. |
 
 ### Labeling
 
@@ -50,6 +50,17 @@ Two classifiers were trained and compared:
 
 **Note on interpretation:** logistic regression's higher headline accuracy is misleading — it arose from the model defaulting to predicting the majority class ("up") for nearly every observation, which trivially matches the ~56% base rate. It captured no real signal, as reflected in its 0.00 precision/recall on the down-class. XGBoost's slightly lower accuracy came with genuine, if modest, discriminative power on both classes, making it the more meaningful and defensible model despite the lower top-line number.
 
+### Additional evaluation: confusion matrix and ROC curve
+
+| | Predicted Down | Predicted Up |
+|---|---|---|
+| **Actual Down** | 570 | 3,125 |
+| **Actual Up** | 714 | 3,701 |
+
+**ROC AUC: 0.506**
+
+The AUC score is the more complete diagnostic here, and it tempers the earlier precision/recall result: at 0.506, the model's ability to rank stocks by likelihood of rising is only marginally better than random chance (0.5) across all possible decision thresholds. While XGBoost showed non-zero precision/recall on the down-class at the default threshold — a real improvement over logistic regression's total collapse — the AUC indicates the underlying predictive signal is very weak. This is consistent with the broader finding that three simple technical factors carry only a thin, but non-zero, signal for one-month-ahead stock direction. The model shows real (if modest) capability, but should not be overstated as a strong predictive edge.
+
 ### Feature importance (XGBoost)
 
 | Feature | Importance |
@@ -58,7 +69,7 @@ Two classifiers were trained and compared:
 | Price factor | 0.339 |
 | Volatility | 0.289 |
 
-No single factor dominated; the model draws on a relatively even blend of all three, suggesting the predictive signal (such as it is) is distributed rather than concentrated in one dimension.
+No single factor dominated; the model draws on a relatively even blend of all three, suggesting the predictive signal (such as it is) is distributed rather than concentrated in one dimension. This is broadly consistent with the factors' theoretical roles: momentum's slight edge aligns with its status as the most empirically robust of the three in academic literature, while volatility and price factor contribute comparable, complementary signal rather than one dominating.
 
 ### Backtest (test period only, out-of-sample)
 
@@ -70,7 +81,7 @@ A simple long-only strategy was simulated: on each day, hold an equal-weighted p
 | Max drawdown | -13.64% | -16.77% |
 | Final value (per $1 invested) | $1.20 | $1.18 |
 
-The strategy modestly outperformed the benchmark in absolute terms, but the more notable result is the improvement in **risk-adjusted return** (higher Sharpe) and a **shallower maximum drawdown** — the model-driven approach reduced downside during the test period's volatility spike without sacrificing return.
+The strategy modestly outperformed the benchmark in absolute terms, but the more notable result is the improvement in **risk-adjusted return** (higher Sharpe) and a **shallower maximum drawdown** — the model-driven approach reduced downside during the test period's volatility spike without sacrificing return. Given the weak AUC reported above, this result should be read as evidence that even a thin predictive signal can translate into a modest, economically meaningful improvement in portfolio-level risk-adjusted performance — not as evidence of strong directional forecasting ability.
 
 ## Limitations
 
@@ -78,7 +89,7 @@ The strategy modestly outperformed the benchmark in absolute terms, but the more
 - **Simple label:** forward 21-day binary direction is a coarse target; it doesn't account for magnitude of return or transaction costs.
 - **No transaction costs or slippage:** the backtest assumes frictionless daily rebalancing, which would not hold in live trading.
 - **Single test period:** results reflect one 2024–2025 out-of-sample window; performance is not validated across multiple market regimes (e.g. a sustained bear market).
-- **Modest predictive power:** classification accuracy only modestly exceeds the base rate; this is a realistic and expected outcome for short-horizon equity direction prediction using simple technical factors, not a limitation unique to this implementation.
+- **Weak standalone predictive power:** the near-random AUC (0.506) indicates limited directional forecasting ability at the individual-stock level; this is a realistic and expected outcome for short-horizon equity direction prediction using simple technical factors, not a limitation unique to this implementation.
 
 ## Tools Used
 
@@ -86,7 +97,8 @@ Python, pandas, NumPy, scikit-learn, XGBoost, yfinance, Matplotlib, Jupyter Note
 
 ## Possible Extensions
 
-- Incorporate fundamental factors (valuation, quality, growth)
+- Incorporate fundamental factors (valuation, quality, growth) and additional technical indicators (RSI, MACD, Bollinger Bands)
 - Test alternative labeling schemes (e.g. return magnitude via regression rather than binary classification)
-- Walk-forward / rolling-window validation across multiple market regimes
+- Walk-forward / rolling-window validation across multiple market regimes, using time-series-aware cross-validation
 - Incorporate transaction costs and turnover constraints into the backtest
+- Compare against additional models (Random Forest, LightGBM) and tune hyperparameters systematically (GridSearchCV/Optuna)
